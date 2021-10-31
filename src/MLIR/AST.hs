@@ -140,6 +140,7 @@ data Attribute =
   | AffineMapAttr  Affine.Map
   | UnitAttr
   | DenseElementsAttr Type DenseElements
+  | FlatSymbolRefAttr BS.ByteString
   deriving Eq
   -- TODO(apaszke): (Flat) SymbolRef, IntegerSet, Opaque
 
@@ -445,6 +446,11 @@ instance FromAST Attribute Native.Attribute where
       Native.withStringRef value \(Native.StringRef ptr len) ->
         [C.exp| MlirAttribute {
           mlirStringAttrGet($(MlirContext ctx), (MlirStringRef){$(char* ptr), $(size_t len)})
+        } |]
+    FlatSymbolRefAttr value -> do
+      Native.withStringRef value \(Native.StringRef ptr len) ->
+        [C.exp| MlirAttribute {
+          mlirFlatSymbolRefAttrGet($(MlirContext ctx), (MlirStringRef){$(char* ptr), $(size_t len)})
         } |]
     TypeAttr ty -> do
       nativeType <- fromAST ctx env ty
