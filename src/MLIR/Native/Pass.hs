@@ -75,3 +75,16 @@ addConvertReconcileUnrealizedCastsPass pm =
   [C.exp| void {
     mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateConversionReconcileUnrealizedCasts())
   } |]
+
+addConvertAffineToStandardPass :: PassManager -> IO ()
+addConvertAffineToStandardPass pm =
+  [C.exp| void {
+    mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateConversionConvertAffineToStandard())
+  } |]
+
+addConvertSCFToStandardPass :: PassManager -> IO ()
+addConvertSCFToStandardPass pm =
+  [C.exp| void {
+    mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateConversionSCFToStandard())
+  } |]
+
