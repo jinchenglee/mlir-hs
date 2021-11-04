@@ -25,6 +25,7 @@ C.context $ C.baseCtx <> mlirCtx
 C.include "mlir-c/IR.h"
 C.include "mlir-c/Pass.h"
 C.include "mlir-c/Conversion.h"
+C.include "mlir-c/Transforms.h"
 
 -- TODO(apaszke): Flesh this out based on the header
 
@@ -88,3 +89,8 @@ addConvertSCFToStandardPass pm =
     mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateConversionSCFToStandard())
   } |]
 
+addTransformsCanonicalizerPass :: PassManager -> IO ()
+addTransformsCanonicalizerPass pm =
+  [C.exp| void {
+    mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateTransformsCanonicalizer())
+  } |]
