@@ -89,8 +89,15 @@ addConvertSCFToStandardPass pm =
     mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateConversionSCFToStandard())
   } |]
 
+addConvertLinalgToStandardPass :: PassManager -> IO ()
+addConvertLinalgToStandardPass pm =
+  [C.exp| void {
+    mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateConversionConvertLinalgToStandard())
+  } |]
+
 addTransformsCanonicalizerPass :: PassManager -> IO ()
 addTransformsCanonicalizerPass pm =
   [C.exp| void {
     mlirPassManagerAddOwnedPass($(MlirPassManager pm), mlirCreateTransformsCanonicalizer())
   } |]
+
