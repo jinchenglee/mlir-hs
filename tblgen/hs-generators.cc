@@ -34,10 +34,10 @@
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/TableGenBackend.h"
 #include "mlir/TableGen/Argument.h"
+#include "mlir/TableGen/Class.h"
 #include "mlir/TableGen/CodeGenHelpers.h"
 #include "mlir/TableGen/Format.h"
 #include "mlir/TableGen/Interfaces.h"
-#include "mlir/TableGen/OpClass.h"
 #include "mlir/TableGen/Operator.h"
 #include "mlir/TableGen/Region.h"
 #include "mlir/TableGen/SideEffects.h"
@@ -226,6 +226,8 @@ const attr_pattern_map& getAttrPatternTemplates() {
                            "(AST.IStorableArray {0} Int64)", {"Ix {0}", "Show {0}"}, {"PatternUtil.DummyIx"}}},
       {"IndexAttr", {"IntegerAttr IndexType {0}", "Int", {}, {}}},
       {"StrAttr", {"StringAttr {0}", "BS.ByteString", {}, {}}},
+      // TODO(jpienaar): We could specialize this one more to query Type.
+      {"TypedAttrInterface", {"{0}", "Attribute", {}, {}}},
   };
   return *kAttrHandlers;
 }
@@ -249,7 +251,7 @@ const std::string sanitizeName(llvm::StringRef name, llvm::Optional<int> idx = l
   static const llvm::StringSet<>* kReservedNames = new llvm::StringSet<>{
       // TODO(apaszke): Add more keywords
       // Haskell keywords
-      "in", "data",
+      "in", "data", "if"
   };
   if (name.empty()) {
     assert(idx);
@@ -497,7 +499,7 @@ llvm::Optional<std::string> buildOperation(
           , opLocation = {1}
           , opResultTypes = Explicit {2}
           , opOperands = {3}
-          , opRegions = [{4:$[ ]}]
+          , opRegions = [{4:$[ , ]}]
           , opSuccessors = []
           , opAttributes = ({5}{6}{7:$[ ]}){8}
           })";
@@ -556,7 +558,7 @@ void emitBuilderMethod(mlir::tblgen::Operator& op,
     prologue = "";
   }
 
-  std::string builder_name = legalizeBuilderName(stripDialect(op.getOperationName()));
+  std::string builder_name = sanitizeName(legalizeBuilderName(stripDialect(op.getOperationName())));
 
   std::vector<std::string> builder_arg_types;
 

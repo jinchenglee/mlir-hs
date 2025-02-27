@@ -14,7 +14,7 @@
 
 module MLIR.NativeSpec where
 
-import Test.Hspec hiding (shouldContain)
+import Test.Hspec hiding (shouldContain, shouldStartWith)
 
 import Text.RawString.QQ
 
@@ -30,8 +30,8 @@ import qualified MLIR.Native.Pass as MLIR
 import qualified MLIR.Native.ExecutionEngine as MLIR
 
 exampleModuleStr :: BS.ByteString
-exampleModuleStr = pack $ [r|module  {
-  func @add(%arg0: i32) -> i32 attributes {llvm.emit_c_interface} {
+exampleModuleStr = pack $ [r|module {
+  func.func @add(%arg0: i32) -> i32 attributes {llvm.emit_c_interface} {
     %0 = arith.addi %arg0, %arg0 : i32
     return %0 : i32
   }
@@ -54,6 +54,9 @@ prepareContext = do
 shouldContain :: BS.ByteString -> BS.ByteString -> Expectation
 shouldContain str sub = str `shouldSatisfy` BS.isInfixOf sub
 
+shouldStartWith :: BS.ByteString -> BS.ByteString -> Expectation
+shouldStartWith str sub = str `shouldSatisfy` BS.isPrefixOf sub
+
 spec :: Spec
 spec = do
   describe "Basics" $ do
@@ -71,7 +74,7 @@ spec = do
       m <- MLIR.createEmptyModule loc
       str <- MLIR.showModule m
       MLIR.destroyModule m
-      str `shouldBe` "module  {\n}\n"
+      str `shouldBe` "module {\n}\n"
 
     it "Can parse an example module" $ \ctx -> do
       exampleModule <- liftM fromJust $
@@ -100,6 +103,25 @@ spec = do
         MLIR.destroyModule m
         str `shouldContain` "loc(\"WhatIamCalled\")"
 
+    it "Can extract first operation (Function) of module" $ \ctx -> do
+      exampleModule <- liftM fromJust $
+        MLIR.withStringRef exampleModuleStr $ MLIR.parseModule ctx
+      operations <- (MLIR.getModuleBody >=> MLIR.getBlockOperations) exampleModule
+      functionStr' <- MLIR.showOperation $ head operations
+      functionStr' `shouldStartWith` "func.func @add(%arg0: i32) -> i32"
+      MLIR.destroyModule exampleModule
+
+    it "Can show operations inside region of function" $ \ctx -> do
+      exampleModule <- liftM fromJust $
+        MLIR.withStringRef exampleModuleStr $ MLIR.parseModule ctx
+      operations <- (MLIR.getModuleBody >=> MLIR.getBlockOperations) exampleModule
+      regions <- MLIR.getOperationRegions (head operations)
+      blocks <- MLIR.getRegionBlocks (head regions)
+      ops <- MLIR.getBlockOperations $ head blocks
+      opStrs <- sequence $ map MLIR.showOperation ops
+      (BS.intercalate " ; " opStrs) `shouldBe` "%0 = arith.addi %arg0, %arg0 : i32 ; func.return %0 : i32"
+      MLIR.destroyModule exampleModule
+
   describe "Evaluation engine" $ beforeAll prepareContext $ do
     it "Can evaluate the example module" $ \ctx -> do
       m <- liftM fromJust $
@@ -113,7 +135,7 @@ spec = do
         lowerToLLVM m = do
           ctx <- MLIR.getContext m
           MLIR.withPassManager ctx \pm -> do
-            MLIR.addConvertStandardToLLVMPass pm
+            MLIR.addConvertFuncToLLVMPass pm
             MLIR.addConvertReconcileUnrealizedCastsPass pm
             result <- MLIR.runPasses pm m
             when (result == MLIR.Failure) $ error "Failed to lower to LLVM!"

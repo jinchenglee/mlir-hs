@@ -41,9 +41,14 @@ module MLIR.Native (
     showOperation,
     showOperationWithLocation,
     verifyOperation,
+    -- * Region
+    Region,
+    getOperationRegions,
+    getRegionBlocks,
     -- * Block
     Block,
     showBlock,
+    getBlockOperations,
     -- * Module
     Module,
     createEmptyModule,
@@ -91,7 +96,7 @@ C.include "mlir-c/Debug.h"
 C.include "mlir-c/IR.h"
 C.include "mlir-c/Pass.h"
 C.include "mlir-c/Conversion.h"
-C.include "mlir-c/Registration.h"
+C.include "mlir-c/RegisterEverything.h"
 
 C.verbatim stringCallbackDecl
 
@@ -123,7 +128,14 @@ class HasContext a where
 
 -- | Register all builtin MLIR dialects in the specified 'Context'.
 registerAllDialects :: Context -> IO ()
-registerAllDialects ctx = [C.exp| void { mlirRegisterAllDialects($(MlirContext ctx)) } |]
+registerAllDialects ctx = [C.block| void {
+    MlirDialectRegistry registry = mlirDialectRegistryCreate();
+    mlirRegisterAllDialects(registry);
+    mlirContextAppendDialectRegistry($(MlirContext ctx), registry);
+    mlirDialectRegistryDestroy(registry);
+    mlirContextLoadAllAvailableDialects($(MlirContext ctx));
+    mlirContextSetAllowUnregisteredDialects($(MlirContext ctx), true);
+  } |]
 
 -- | Retrieve the count of dialects currently registered in the 'Context'.
 getNumLoadedDialects :: Context -> IO Int
@@ -193,6 +205,41 @@ verifyOperation op =
   (1==) <$> [C.exp| bool { mlirOperationVerify($(MlirOperation op)) } |]
 
 --------------------------------------------------------------------------------
+-- Region
+
+-- | Returns the first Region in a Operation.
+getOperationFirstRegion :: Operation -> IO (Maybe Region)
+getOperationFirstRegion op = nullable <$> [C.exp| MlirRegion {
+    mlirOperationGetFirstRegion($(MlirOperation op))
+  } |]
+
+-- | Returns the next Block in a Region.
+getOperationNextRegion :: Region -> IO (Maybe Region)
+getOperationNextRegion region = nullable <$> [C.exp| MlirRegion {
+    mlirRegionGetNextInOperation($(MlirRegion region))
+  } |]
+
+-- | Returns the regions of an Operation.
+getOperationRegions :: Operation -> IO [Region]
+getOperationRegions op = unrollIOMaybe getOperationNextRegion (getOperationFirstRegion op)
+
+-- | Returns the first Block in a Region.
+getRegionFirstBlock :: Region -> IO (Maybe Block)
+getRegionFirstBlock region = nullable <$> [C.exp| MlirBlock {
+    mlirRegionGetFirstBlock($(MlirRegion region))
+  } |]
+
+-- | Returns the next Block in a Region.
+getRegionNextBlock :: Block -> IO (Maybe Block)
+getRegionNextBlock block = nullable <$> [C.exp| MlirBlock {
+    mlirBlockGetNextInRegion($(MlirBlock block))
+  } |]
+
+-- | Returns the Blocks in a Region.
+getRegionBlocks :: Region -> IO [Block]
+getRegionBlocks region = unrollIOMaybe getRegionNextBlock (getRegionFirstBlock region)
+
+--------------------------------------------------------------------------------
 -- Block
 
 -- | Show the block using the MLIR printer.
@@ -200,6 +247,21 @@ showBlock :: Block -> IO BS.ByteString
 showBlock block = showSomething \ctx -> [C.exp| void {
     mlirBlockPrint($(MlirBlock block), HaskellMlirStringCallback, $(void* ctx))
   } |]
+
+-- | Returns the first operation in a block.
+getFirstOperationBlock :: Block -> IO (Maybe Operation)
+getFirstOperationBlock block = nullable <$>
+  [C.exp| MlirOperation { mlirBlockGetFirstOperation($(MlirBlock block)) } |]
+
+-- | Returns the next operation in the block. Returns 'Nothing' if last
+-- operation in block.
+getNextOperationBlock :: Operation -> IO (Maybe Operation)
+getNextOperationBlock childOp = nullable <$> [C.exp| MlirOperation {
+  mlirOperationGetNextInBlock($(MlirOperation childOp)) } |]
+
+-- | Returns the Operations in a Block.
+getBlockOperations :: Block -> IO [Operation]
+getBlockOperations block = unrollIOMaybe getNextOperationBlock (getFirstOperationBlock block)
 
 --------------------------------------------------------------------------------
 -- Module
@@ -302,6 +364,14 @@ showSomething action = do
       bs <- peekStringRef $ StringRef dataPtr size
       free dataPtr
       return bs
+
+-- | Unroll using a function that is equivalent to "get next" inside IO.
+unrollIOMaybe :: (a -> IO (Maybe a)) -> IO (Maybe a) -> IO [a]
+unrollIOMaybe fn z = do
+  x <- z
+  case x of
+      Nothing -> return []
+      Just x' -> (x':) <$> unrollIOMaybe fn (fn x')
 
 --------------------------------------------------------------------------------
 -- Debugging utilities

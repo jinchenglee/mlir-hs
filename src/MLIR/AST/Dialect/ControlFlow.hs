@@ -1,4 +1,4 @@
--- Copyright 2021 Google LLC
+-- Copyright 2022 Google LLC
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
-module MLIR.AST.Dialect.Std
-  ( module MLIR.AST.Dialect.Std
-  , module MLIR.AST.Dialect.Generated.Std
+module MLIR.AST.Dialect.ControlFlow
+  ( module MLIR.AST.Dialect.ControlFlow,
+    module MLIR.AST.Dialect.Generated.ControlFlow
   ) where
 
 import Prelude hiding (return)
@@ -23,11 +23,11 @@ import Data.Array.IArray
 import MLIR.AST
 import MLIR.AST.Builder
 
-import MLIR.AST.Dialect.Generated.Std
+import MLIR.AST.Dialect.Generated.ControlFlow
 
 pattern Branch :: Location -> BlockName -> [Name] -> Operation
 pattern Branch loc block args = Operation
-  { opName = "std.br"
+  { opName = "cf.br"
   , opLocation = loc
   , opResultTypes = Explicit []
   , opOperands = args
@@ -42,7 +42,7 @@ br block args = emitOp (Branch UnknownLocation block $ operands args) >> termina
 cond_br :: MonadBlockBuilder m => Value -> BlockName -> [Value] -> BlockName -> [Value] -> m EndOfBlock
 cond_br cond trueBlock trueArgs falseBlock falseArgs = do
   emitOp_ $ Operation
-    { opName = "std.cond_br"
+    { opName = "cf.cond_br"
     , opLocation = UnknownLocation
     , opResultTypes = Explicit []
     , opOperands = operands $ [cond] <> trueArgs <> falseArgs

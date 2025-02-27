@@ -209,11 +209,11 @@ pattern FuncAttrs name ty <-
   ((\d -> (M.lookup "sym_name" d, M.lookup "type" d)) ->
    (Just (StringAttr name), Just (TypeAttr ty)))
   where FuncAttrs name ty = M.fromList [("sym_name", StringAttr name),
-                                        ("type", TypeAttr ty)]
+                                        ("function_type", TypeAttr ty)]
 
 pattern FuncOp :: Location -> Name -> Type -> Region -> Operation
 pattern FuncOp loc name ty body = Operation
-  { opName = "builtin.func"
+  { opName = "func.func"
   , opLocation = loc
   , opResultTypes = Explicit []
   , opOperands = []
@@ -363,12 +363,16 @@ instance FromAST Region Native.Region where
         return $ blockEnv <> (M.singleton (blockName block) nativeBlock)
 
       initBlock :: Block -> IO Native.Block
-      initBlock Block{..} = evalContT $ do
-        let blockArgTypes = snd <$> blockArgs
-        (numBlockArgs, nativeArgTypes) <- packFromAST ctx env blockArgTypes
-        liftIO $ [C.exp| MlirBlock {
-          mlirBlockCreate($(intptr_t numBlockArgs), $(MlirType* nativeArgTypes))
-        } |]
+      initBlock Block{..} = do
+        -- TODO: Use proper locations
+        let locations = take (length blockArgs) (repeat UnknownLocation)
+        evalContT $ do
+          let blockArgTypes = snd <$> blockArgs
+          (numBlockArgs, nativeArgTypes) <- packFromAST ctx env blockArgTypes
+          (_, locs) <- packFromAST ctx env locations
+          liftIO $ [C.exp| MlirBlock {
+            mlirBlockCreate($(intptr_t numBlockArgs), $(MlirType* nativeArgTypes), $(MlirLocation* locs))
+          } |]
 
 
 instance FromAST Block Native.Block where

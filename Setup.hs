@@ -34,7 +34,7 @@ import Control.Lens.Setter
 import Control.Lens.Operators ((&))
 
 llvmVersion :: Version
-llvmVersion = mkVersion [14]
+llvmVersion = mkVersion [15]
 
 llvmConfigProgram :: Program
 llvmConfigProgram = (simpleProgram "llvm-config")
@@ -127,9 +127,10 @@ main = defaultMainWithHooks simpleUserHooks
   , confHook = \(genericPackageDesc, hookedBuildInfo) confFlags -> do
       tblgen <- buildTblgen confFlags
       let dialects =
-            [ ("Std"             , "mlir/Dialect/StandardOps/IR/Ops.td", [])
+            [ ("Func"            , "mlir/Dialect/Func/IR/FuncOps.td", [])
             , ("Arith"           , "mlir/Dialect/Arithmetic/IR/ArithmeticOps.td", ["-strip-prefix", "Arith_"])
-            , ("Vector"          , "mlir/Dialect/Vector/VectorOps.td", ["-strip-prefix", "Vector_"])
+            , ("ControlFlow"     , "mlir/Dialect/ControlFlow/IR/ControlFlowOps.td", ["-dialect-name", "ControlFlow"])
+            , ("Vector"          , "mlir/Dialect/Vector/IR/VectorOps.td", ["-strip-prefix", "Vector_"])
             , ("Shape"           , "mlir/Dialect/Shape/IR/ShapeOps.td", ["-strip-prefix", "Shape_"])
             , ("LLVM"            , "mlir/Dialect/LLVMIR/LLVMOps.td", ["-strip-prefix", "LLVM_", "-dialect-name", "LLVM"])
             , ("Linalg"          , "mlir/Dialect/Linalg/IR/LinalgOps.td", [])
@@ -160,9 +161,9 @@ main = defaultMainWithHooks simpleUserHooks
 
       ensureDirectory "test/MLIR/AST/Dialect/Generated"
       generatedSpecModules <- liftM catMaybes $ forM dialects $ \(dialect, tdPath, opts) -> do
-        case dialect == "LinalgStructured" of
-          True -> return Nothing
-          False -> do
+        case dialect of
+          "LinalgStructured" -> return Nothing
+          _ -> do
             tblgen TestGenerator tdPath ("test/MLIR/AST/Dialect/Generated/" <> dialect <> "Spec.hs") opts
             return $ Just $ fromString $ "MLIR.AST.Dialect.Generated." <> dialect <> "Spec"
       let [(testSuiteName, condTestSuite)] = condTestSuites genericPackageDesc
